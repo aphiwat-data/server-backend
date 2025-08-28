@@ -1,4 +1,3 @@
-// app.js
 const express = require('express');
 const bcrypt  = require('bcrypt');
 const con     = require('./db'); // <- ดูไฟล์ db.js ด้านล่าง
@@ -54,25 +53,25 @@ app.post('/login', (req, res) => {
   });
 });
 
-// ---------- get all expenses (optional filter by user_id) ----------
-app.get('/expenses', (req, res) => {
-  const userId = req.query.user_id || null;
+// ---------- get all expenses (path param userId) ----------
+app.get('/expenses/:userId', (req, res) => {
+  const { userId } = req.params;
   const sql = `
     SELECT id, item, paid, date
     FROM expense
-    WHERE (? IS NULL OR user_id = ?)
+    WHERE user_id = ?
     ORDER BY id
   `;
-  con.query(sql, [userId, userId], (err, rows) => {
+  con.query(sql, [userId], (err, rows) => {
     if (err) return http500(res, 'DB Server Error');
     res.json(rows);
   });
 });
 
-// ---------- get today's expenses (require user_id) ----------
-app.get('/expenses/today', (req, res) => {
-  const { user_id } = req.query;
-  if (!user_id) return res.status(400).send('Missing user_id');
+// ---------- get today's expenses (path param userId) ----------
+app.get('/expenses/:userId/today', (req, res) => {
+  const { userId } = req.params;
+  if (!userId) return res.status(400).send('Missing userId');
 
   const sql = `
     SELECT id, item, paid, date
@@ -80,16 +79,16 @@ app.get('/expenses/today', (req, res) => {
     WHERE user_id = ? AND DATE(date) = CURDATE()
     ORDER BY id
   `;
-  con.query(sql, [user_id], (err, rows) => {
+  con.query(sql, [userId], (err, rows) => {
     if (err) return http500(res, 'DB Server Error');
     res.json(rows);
   });
 });
 
-// ---------- search expenses by keyword (require user_id & q) ----------
-app.get('/expenses/search', (req, res) => {
-  const { user_id, q } = req.query;
-  if (!user_id || !q) return res.status(400).send('Missing user_id or q');
+// ---------- search expenses by keyword ----------
+app.get('/expenses/:userId/search/:q', (req, res) => {
+  const { userId, q } = req.params;
+  if (!userId || !q) return res.status(400).send('Missing userId or keyword');
 
   const sql = `
     SELECT id, item, paid, date
@@ -97,31 +96,31 @@ app.get('/expenses/search', (req, res) => {
     WHERE user_id = ? AND item LIKE CONCAT('%', ?, '%')
     ORDER BY id
   `;
-  con.query(sql, [user_id, q], (err, rows) => {
+  con.query(sql, [userId, q], (err, rows) => {
     if (err) return http500(res, 'DB Server Error');
     res.json(rows);
   });
 });
 
 // ---------- add expense ----------
-app.post('/expenses', (req, res) => {
-  const { user_id, item, paid } = req.body || {};
-  if (!user_id || !item || !paid) return res.status(400).send('Missing field');
+app.post('/expenses/:userId', (req, res) => {
+  const { userId } = req.params;
+  const { item, paid } = req.body || {};
+  if (!userId || !item || !paid) return res.status(400).send('Missing field');
 
   const sql = 'INSERT INTO expense(user_id, item, paid, date) VALUES (?, ?, ?, NOW())';
-  con.query(sql, [user_id, item, paid], (err) => {
+  con.query(sql, [userId, item, paid], (err) => {
     if (err) return http500(res, 'DB Server Error');
     res.send('Insert expense done');
   });
 });
 
-// ---------- delete expense (protect by user_id) ----------
-app.delete('/expenses/:id', (req, res) => {
-  const { id } = req.params;
-  const { user_id } = req.query;
-  if (!user_id) return res.status(400).send('Missing user_id');
+// ---------- delete expense ----------
+app.delete('/expenses/:userId/:id', (req, res) => {
+  const { userId, id } = req.params;
+  if (!userId) return res.status(400).send('Missing userId');
 
-  con.query('DELETE FROM expense WHERE id = ? AND user_id = ?', [id, user_id], (err, r) => {
+  con.query('DELETE FROM expense WHERE id = ? AND user_id = ?', [id, userId], (err, r) => {
     if (err) return http500(res, 'DB Server Error');
     if (r.affectedRows === 0) return res.status(404).send('Not found');
     res.send('Delete done');
